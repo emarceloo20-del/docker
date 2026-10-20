@@ -1,0 +1,15 @@
+vendor
+node_modules
+.git
+.gitignore
+.env
+.env.*
+Dockerfile
+.dockerignore
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+tests
+phpunit.xml
+README.md

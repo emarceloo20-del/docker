@@ -1,0 +1,86 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: eco-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    # Sin "ports": 3306 solo es accesible dentro de la red interna
+    expose:
+      - "3306"
+    networks: [backend_net]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    image: eco-backend:latest
+    container_name: eco-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: "Ecommerce API"
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_TTL: ${JWT_TTL:-60}
+      JWT_ALGO: HS256
+      STRIPE_KEY: ${STRIPE_KEY}
+      STRIPE_SECRET: ${STRIPE_SECRET}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
+      L5_SWAGGER_GENERATE_ALWAYS: "true"
+      L5_SWAGGER_CONST_HOST: ${L5_SWAGGER_CONST_HOST:-http://localhost:8000/api}
+      L5_FORMAT_TO_USE_FOR_DOCS: json
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+      LOG_CHANNEL: stderr
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+    ports:
+      - "${BACKEND_PORT:-8000}:80"
+    networks: [backend_net, frontend_net]
+
+  frontend:
+    build:
+      context: ./frontend
+    image: eco-frontend:latest
+    container_name: eco-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      # Server Components y Server Actions llaman a la API desde el contenedor,
+      # por la red interna: usa el nombre del servicio, no localhost.
+      BASE_URL: http://backend/api
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks: [frontend_net]
+
+networks:
+  backend_net:
+  frontend_net:
+
+volumes:
+  db_data:
